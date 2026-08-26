@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3 Tuz - Admin Panel</title>
+<style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    h2, h3 { color: #bb86fc; }
+    .card { background: #1e1e1e; padding: 20px; margin-bottom: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #333; }
+    input { background: #2c2c2c; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; margin: 5px 0; width: calc(100% - 22px); }
+    button { background: #03dac6; color: #000; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; margin: 5px 2px; }
+    button:hover { background: #018786; }
+    button.danger { background: #cf6679; color: white; }
+    button.danger:hover { background: #b00020; }
+    button.secondary { background: #3700b3; color: white; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid #333; }
+    th { color: #03dac6; }
+    .online-tag { color: #4caf50; font-weight: bold; font-size: 12px; margin-left: 5px; }
+    .action-group { display: flex; flex-wrap: wrap; gap: 5px; }
+    .balance-badge { background: #333; padding: 4px 8px; border-radius: 4px; color: #ffab40; font-family: monospace; font-size: 1.1em; }
+    #login-screen { display: flex; justify-content: center; align-items: center; height: 80vh; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen">
+        <div class="card" style="width: 350px; text-align: center;">
+            <h2>🔐 Admin Girişi</h2>
+            <input type="text" id="adminUser" placeholder="İstifadəçi adı">
+            <input type="password" id="adminPass" placeholder="Şifrə">
+            <button onclick="login()" style="width: 100%; margin-top: 10px;">DAXİL OL</button>
+        </div>
+    </div>
+
+    <!-- MAIN PANEL -->
+    <div id="main-panel" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>🎮 3 Tuz Oyun Paneli</h2>
+            <button class="danger" onclick="logout()">ÇIXIŞ</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div class="card">
+                <h3>📊 Server Statistikası</h3>
+                <div id="stats">Yüklənir...</div>
+            </div>
+            <div class="card">
+                <h3>🟢 Onlayn Oyunçular</h3>
+                <div id="online-list">Heç kim yoxdur</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>👥 İstifadəçi İdarəetməsi</h3>
+                <button class="secondary" onclick="getUsers()">Siyahını Yenilə</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>İstifadəçi</th>
+                        <th>Balans</th>
+                        <th>Əməliyyatlar</th>
+                    </tr>
+                </thead>
+                <tbody id="user-table-body">
+                    <!-- Users will be listed here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    let TOKEN = "";
+    let socket = null;
+    let onlineUsers = [];
+
+    async function login() {
+        const username = document.getElementById("adminUser").value;
+        const password = document.getElementById("adminPass").value;
+
+        try {
+            const res = await fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
+            });
+
+            const data = await res.json();
+            if (data.token && data.user.username === "admin33") {
+                TOKEN = data.token;
+                document.getElementById("login-screen").style.display = "none";
+                document.getElementById("main-panel").style.display = "block";
+                init();
+            } else {
+                alert("Giriş rədd edildi!");
+            }
+        } catch (e) {
+            alert("Xəta baş verdi");
+        }
+    }
+
+    function logout() {
+        location.reload();
+    }
+
+    function init() {
+        connectSocket();
+        getUsers();
+        updateStats();
+        setInterval(updateStats, 5000);
+    }
+
+    function connectSocket() {
+        socket = io();
+        socket.emit("identify", "admin33");
+
+        socket.on("adminOnlineUpdate", (list) => {
+            onlineUsers = list;
+            updateOnlineList();
+        });
+
+        socket.on("adminUserUpdate", (data) => {
+            updateUserRow(data);
+        });
+
+        socket.on("adminUpdate", () => {
+            getUsers();
+            updateStats();
+        });
+    }
+
+    function updateOnlineList() {
+        const listDiv = document.getElementById("online-list");
+        if (onlineUsers.length === 0) {
+            listDiv.innerHTML = "Heç kim yoxdur";
+            return;
+        }
+        listDiv.innerHTML = onlineUsers.map(u => `<div style="padding: 2px 0;">🟢 ${u}</div>`).join("");
+        // Onlayn statusu dəyişəndə bütün siyahını yeniləmək olar, çünki badge-lər dəyişir
+        getUsers();
+    }
+
+    function updateUserRow(user) {
+        const row = document.getElementById(`user-row-${user.username.toLowerCase()}`);
+        if (row) {
+            const balanceBadge = row.querySelector(".balance-badge");
+            const oldBalance = parseFloat(balanceBadge.innerText);
+            const newBalance = user.balance;
+
+            if (oldBalance !== newBalance) {
+                balanceBadge.innerText = newBalance.toFixed(2) + " ₼";
+                balanceBadge.style.color = newBalance > oldBalance ? "#4caf50" : "#cf6679";
+                setTimeout(() => { balanceBadge.style.color = "#ffab40"; }, 2000);
+            }
+        }
+    }
+
+    async function getUsers() {
+        const res = await fetch("/admin/users", {
+            headers: { "authorization": TOKEN }
+        });
+        const users = await res.json();
+        const tbody = document.getElementById("user-table-body");
+
+        // Siyahını səmərəli şəkildə yeniləyirik
+        Object.keys(users).forEach(username => {
+            const u = users[username];
+            const lowerName = username.toLowerCase();
+            const isOnline = onlineUsers.includes(lowerName);
+            let tr = document.getElementById(`user-row-${lowerName}`);
+
+            if (!tr) {
+                tr = document.createElement("tr");
+                tr.id = `user-row-${lowerName}`;
+                tbody.appendChild(tr);
+            }
+
+            tr.innerHTML = `
+                <td>
+                    <div style="display: flex; align-items: center;">
+                        <strong>${u.username}</strong>
+                        ${isOnline ? '<span class="online-tag" style="margin-left: 10px;">● ONLAYN</span>' : ''}
+                    </div>
+                    <div style="font-size: 0.8em; color: #888; margin-top: 4px;">${u.phone || 'Tel yoxdur'}</div>
+                </td>
+                <td><span class="balance-badge" style="transition: color 0.5s;">${u.balance.toFixed(2)} ₼</span></td>
+                <td>
+                    <div class="action-group">
+                        <button onclick="modifyBalance('${u.username}', 10)">+10</button>
+                        <button onclick="modifyBalance('${u.username}', 50)">+50</button>
+                        <button onclick="promptBalance('${u.username}', 'add')">Artır</button>
+                        <button class="danger" onclick="promptBalance('${u.username}', 'sub')">Azalt</button>
+                        <button class="secondary" onclick="promptBalance('${u.username}', 'set')">Set</button>
+                        <button class="danger" onclick="deleteUser('${u.username}')">SİL</button>
+                    </div>
+                </td>
+            `;
+        });
+
+        // Silinmiş istifadəçiləri təmizlə
+        Array.from(tbody.rows).forEach(row => {
+            const rowUser = row.id.replace("user-row-", "");
+            if (!users[rowUser]) row.remove();
+        });
+    }
+
+    async function modifyBalance(username, amount) {
+        await fetch("/admin/balance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "authorization": TOKEN },
+            body: JSON.stringify({ username, amount })
+        });
+        getUsers();
+    }
+
+    async function promptBalance(username, type) {
+        let msg = type === 'add' ? "Nə qədər artırılsın?" : (type === 'sub' ? "Nə qədər azaldılsın?" : "Yeni balansı daxil edin:");
+        let val = prompt(msg);
+        if (val === null || val === "") return;
+
+        let amount = parseFloat(val.replace(",", "."));
+        if (isNaN(amount)) return alert("Düzgün rəqəm daxil edin");
+
+        if (type === 'sub') amount = -Math.abs(amount);
+
+        let url = (type === 'set') ? "/admin/balance/set" : "/admin/balance";
+
+        await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "authorization": TOKEN },
+            body: JSON.stringify({ username, amount })
+        });
+        getUsers();
+    }
+
+    async function deleteUser(username) {
+        if (!confirm(`${username} adlı istifadəçini SİLMƏK istəyirsiniz?`)) return;
+        await fetch("/admin/user/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "authorization": TOKEN },
+            body: JSON.stringify({ username })
+        });
+        getUsers();
+    }
+
+    async function updateStats() {
+        const res = await fetch("/admin/stats", {
+            headers: { "authorization": TOKEN }
+        });
+        const data = await res.json();
+        const today = new Date().toISOString().split('T')[0];
+        const todayProfit = data.stats[today] || 0;
+
+        document.getElementById("stats").innerHTML = `
+            <div>Komissiya: <strong>${data.config.commissionRate}%</strong></div>
+            <div style="margin-top:10px; font-size: 1.2em;">Bugünkü Qazanc: <span style="color: #03dac6;">${todayProfit.toFixed(2)} ₼</span></div>
+        `;
+    }
+</script>
+</body>
+</html>
