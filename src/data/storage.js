@@ -1,4 +1,5 @@
 const fs = require("fs").promises;
+const { exec } = require("child_process");
 
 const USERS_FILE = "users.json";
 const REQUESTS_FILE = "requests.json";
@@ -38,11 +39,44 @@ async function loadData() {
     console.log("Məlumatlar storage modulu vasitəsilə yükləndi.");
 }
 
-async function saveUsers(io) { await fs.writeFile(USERS_FILE, JSON.stringify(data.users)); if(io) io.to("user_admin33").emit("adminUpdate"); }
-async function saveRequests(io) { await fs.writeFile(REQUESTS_FILE, JSON.stringify(data.requests)); if(io) io.to("user_admin33").emit("adminUpdate"); }
-async function saveStats(io) { await fs.writeFile(STATS_FILE, JSON.stringify(data.dailyStats)); if(io) io.to("user_admin33").emit("adminUpdate"); }
-async function saveMessages(io) { await fs.writeFile(MESSAGES_FILE, JSON.stringify(data.adminMessages)); if(io) io.to("user_admin33").emit("adminUpdate"); }
-async function saveConfig(io) { await fs.writeFile(CONFIG_FILE, JSON.stringify(data.config)); if(io) io.to("user_admin33").emit("adminUpdate"); }
+function autoBackup() {
+    // Hər 5 dəqiqədən bir çox tez-tez push etməmək üçün limit qoyula bilər,
+    // amma hazırda hər dəyişiklikdə sinxronizasiya edir.
+    exec('git add . && git commit -m "Avtomatik yedək: ' + new Date().toLocaleString() + '" && git push origin master',
+    (error, stdout, stderr) => {
+        if (error) {
+            console.log("⚠️ Yedəkləmə xətası:", error.message);
+        } else {
+            console.log("✅ Məlumatlar GitHub-a sinxronizasiya olundu.");
+        }
+    });
+}
+
+async function saveUsers(io) {
+    await fs.writeFile(USERS_FILE, JSON.stringify(data.users));
+    if(io) io.to("user_admin33").emit("adminUpdate");
+    autoBackup();
+}
+async function saveRequests(io) {
+    await fs.writeFile(REQUESTS_FILE, JSON.stringify(data.requests));
+    if(io) io.to("user_admin33").emit("adminUpdate");
+    autoBackup();
+}
+async function saveStats(io) {
+    await fs.writeFile(STATS_FILE, JSON.stringify(data.dailyStats));
+    if(io) io.to("user_admin33").emit("adminUpdate");
+    autoBackup();
+}
+async function saveMessages(io) {
+    await fs.writeFile(MESSAGES_FILE, JSON.stringify(data.adminMessages));
+    if(io) io.to("user_admin33").emit("adminUpdate");
+    autoBackup();
+}
+async function saveConfig(io) {
+    await fs.writeFile(CONFIG_FILE, JSON.stringify(data.config));
+    if(io) io.to("user_admin33").emit("adminUpdate");
+    autoBackup();
+}
 
 module.exports = {
     data,
