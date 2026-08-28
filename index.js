@@ -898,51 +898,58 @@ function actuallyStartGame(roomId) {
         const botPlayers = eligible.filter(p => p.isBot);
 
         if (humanPlayers.length > 0 && botPlayers.length > 0) {
-            const botScore = Math.floor(Math.random() * 6) + 17; // 17-22
-            const luckyBot = botPlayers[Math.floor(Math.random() * botPlayers.length)];
-            botWinResult = { hands: {} };
+            // Təbiilik üçün ehtimal faktoru əlavə edirik
+            // Böyük pul yığılıbsa (20 qatdan çox) 90%, adi halda 70% bot udsun
+            const winRate = room.pot > (room.initialBet * 20) ? 0.9 : 0.7;
+            const shouldBotWin = Math.random() < winRate;
 
-            const generateHand = (targetScore) => {
-                const suits = ["♣", "♦", "♥", "♠"].sort(() => Math.random() - 0.5);
-                const s1 = suits[0], s2 = suits[1], s3 = suits[2];
-                if (targetScore === 22) return ["A"+s1, "A"+s2, "6"+s3];
-                if (targetScore === 21) return ["7"+s1, "7"+s2, "7"+s3];
-                if (targetScore === 20) return ["10"+s1, "J"+s1, "6"+s2];
-                if (targetScore === 19) return ["10"+s1, "9"+s1, "6"+s2];
-                if (targetScore === 18) return ["10"+s1, "8"+s1, "6"+s2];
-                if (targetScore === 17) return ["10"+s1, "7"+s1, "6"+s2];
-                if (targetScore === 16) return ["10"+s1, "6"+s1, "7"+s2];
-                if (targetScore === 15) return ["9"+s1, "6"+s1, "7"+s2];
-                if (targetScore === 14) return ["8"+s1, "6"+s1, "7"+s2];
-                if (targetScore === 13) return ["7"+s1, "6"+s1, "8"+s2];
-                if (targetScore === 11) return ["A"+s1, "6"+s2, "7"+s3];
-                return ["10"+s1, "6"+s2, "7"+s3]; // Default 10
-            };
+            if (shouldBotWin) {
+                const botScore = Math.floor(Math.random() * 6) + 17; // 17-22
+                const luckyBot = botPlayers[Math.floor(Math.random() * botPlayers.length)];
+                botWinResult = { hands: {} };
 
-            let bHand = generateHand(botScore);
-            let attempts = 0;
-            while (!bHand.every(c => room.deck.includes(c)) && attempts < 30) {
-                bHand = generateHand(botScore);
-                attempts++;
-            }
+                const generateHand = (targetScore) => {
+                    const suits = ["♣", "♦", "♥", "♠"].sort(() => Math.random() - 0.5);
+                    const s1 = suits[0], s2 = suits[1], s3 = suits[2];
+                    if (targetScore === 22) return ["A"+s1, "A"+s2, "6"+s3];
+                    if (targetScore === 21) return ["7"+s1, "7"+s2, "7"+s3];
+                    if (targetScore === 20) return ["10"+s1, "J"+s1, "6"+s2];
+                    if (targetScore === 19) return ["10"+s1, "9"+s1, "6"+s2];
+                    if (targetScore === 18) return ["10"+s1, "8"+s1, "6"+s2];
+                    if (targetScore === 17) return ["10"+s1, "7"+s1, "6"+s2];
+                    if (targetScore === 16) return ["10"+s1, "6"+s1, "7"+s2];
+                    if (targetScore === 15) return ["9"+s1, "6"+s1, "7"+s2];
+                    if (targetScore === 14) return ["8"+s1, "6"+s1, "7"+s2];
+                    if (targetScore === 13) return ["7"+s1, "6"+s1, "8"+s2];
+                    if (targetScore === 11) return ["A"+s1, "6"+s2, "7"+s3];
+                    return ["10"+s1, "6"+s2, "7"+s3]; // Default 10
+                };
 
-            if (bHand.every(c => room.deck.includes(c))) {
-                botWinResult.hands[luckyBot.username] = bHand;
-                room.deck = room.deck.filter(c => !bHand.includes(c));
+                let bHand = generateHand(botScore);
+                let attempts = 0;
+                while (!bHand.every(c => room.deck.includes(c)) && attempts < 30) {
+                    bHand = generateHand(botScore);
+                    attempts++;
+                }
 
-                humanPlayers.forEach(hp => {
-                    const hScore = Math.floor(Math.random() * (Math.min(botScore - 1, 21) - 10 + 1)) + 10;
-                    let hHand = generateHand(hScore === 12 ? 11 : hScore);
-                    let hAttempts = 0;
-                    while (!hHand.every(c => room.deck.includes(c)) && hAttempts < 30) {
-                        hHand = generateHand(hScore === 12 ? 11 : hScore);
-                        hAttempts++;
-                    }
-                    if (hHand.every(c => room.deck.includes(c))) {
-                        botWinResult.hands[hp.username] = hHand;
-                        room.deck = room.deck.filter(c => !hHand.includes(c));
-                    }
-                });
+                if (bHand.every(c => room.deck.includes(c))) {
+                    botWinResult.hands[luckyBot.username] = bHand;
+                    room.deck = room.deck.filter(c => !bHand.includes(c));
+
+                    humanPlayers.forEach(hp => {
+                        const hScore = Math.floor(Math.random() * (Math.min(botScore - 1, 21) - 10 + 1)) + 10;
+                        let hHand = generateHand(hScore === 12 ? 11 : hScore);
+                        let hAttempts = 0;
+                        while (!hHand.every(c => room.deck.includes(c)) && hAttempts < 30) {
+                            hHand = generateHand(hScore === 12 ? 11 : hScore);
+                            hAttempts++;
+                        }
+                        if (hHand.every(c => room.deck.includes(c))) {
+                            botWinResult.hands[hp.username] = hHand;
+                            room.deck = room.deck.filter(c => !hHand.includes(c));
+                        }
+                    });
+                }
             }
         }
     }
