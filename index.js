@@ -1272,6 +1272,15 @@ io.on("connection", (socket) => {
 
     socket.on("getRoomCounts", () => broadcastRoomCounts());
 
+    socket.on("heartbeat", (username) => {
+        // Heartbeat gəldikdə sadəcə istifadəçinin son görülmə vaxtını yeniləyək
+        const u = (username || "").toString().toLowerCase();
+        if (storage.data.users[u]) {
+            storage.data.users[u].lastSeen = new Date().toLocaleString();
+            // console.log(`💓 Heartbeat: ${username}`);
+        }
+    });
+
     socket.on("joinRoom", (data) => {
         const { roomId, username, initialBet, password } = data;
         const u = (username || "").toString().toLowerCase();
