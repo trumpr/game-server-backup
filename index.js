@@ -386,12 +386,13 @@ function notifyBalance(username) {
 function updateDailyStats(gameType, amount) {
     const today = new Date().toISOString().split('T')[0];
     const stats = storage.data.dailyStats;
-    if (!stats[today]) stats[today] = { total: 0, tuz: 0, aviator: 0 };
+    if (!stats[today]) stats[today] = { total: 0, tuz: 0, aviator: 0, nerd: 0 };
 
     if (gameType === "tuz") stats[today].tuz = Number((stats[today].tuz + amount).toFixed(2));
     else if (gameType === "aviator") stats[today].aviator = Number((stats[today].aviator + amount).toFixed(2));
+    else if (gameType === "nerd") stats[today].nerd = Number((stats[today].nerd + (parseFloat(amount) || 0)).toFixed(2));
 
-    stats[today].total = Number((stats[today].tuz + stats[today].aviator).toFixed(2));
+    stats[today].total = Number(((stats[today].tuz || 0) + (stats[today].aviator || 0) + (stats[today].nerd || 0)).toFixed(2));
     storage.saveStats(io);
 }
 
@@ -1247,6 +1248,30 @@ function broadcastAdminUpdates() {
     io.to("user_admin33").emit("adminUpdate");
 }
 
+function processNerdWinner(roomId, winnerUsername, reason = "") {
+    const room = backgammonRooms[roomId];
+    if (!room || room.winner) return;
+
+    if (backgammonTimers[roomId]) clearInterval(backgammonTimers[roomId]);
+
+    const totalPot = Number((room.bet * 2).toFixed(2));
+    const commission = Number((totalPot * (storage.data.config.commissionRate / 100)).toFixed(2));
+    const winAmount = Number((totalPot - commission).toFixed(2));
+
+    const winnerU = storage.data.users[winnerUsername.toLowerCase()];
+    if (winnerU) {
+        winnerU.balance = Number((winnerU.balance + winAmount).toFixed(2));
+        notifyBalance(winnerUsername);
+    }
+
+    room.winner = winnerUsername;
+    updateDailyStats("nerd", commission);
+    storage.saveUsers(io);
+
+    io.to(roomId).emit("nerdResult", { winner: winnerUsername, amount: winAmount, reason: reason });
+    io.to(roomId).emit("nerdState", room);
+}
+
 function startNerdTurnTimer(roomId) {
     const room = backgammonRooms[roomId];
     if (!room || !room.gameStarted || room.winner) return;
@@ -1277,12 +1302,15 @@ function startNerdTurnTimer(roomId) {
                 timeLeft = 30;
                 io.to(roomId).emit("nerdTimer", { timeLeft, isOvertime });
             } else {
-                // Vaxt bitdi, növbəni dəyiş
+                // Vaxt bitdi, uduzmuş sayılır
                 clearInterval(backgammonTimers[roomId]);
-                room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
-                room.movesLeft = [];
-                io.to(roomId).emit("nerdState", room);
-                startNerdTurnTimer(roomId);
+                const loserColor = room.turn;
+                const winnerColor = loserColor === "WHITE" ? "BROWN" : "WHITE";
+                const winnerUsername = room.players.find(u => room.playerColors[u] === winnerColor);
+
+                if (winnerUsername) {
+                    processNerdWinner(roomId, winnerUsername, "Vaxt bitdi!");
+                }
             }
         } else {
             io.to(roomId).emit("nerdTimer", { timeLeft, isOvertime });
