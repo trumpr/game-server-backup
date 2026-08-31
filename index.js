@@ -1638,6 +1638,8 @@ io.on("connection", (socket) => {
 
     socket.on("joinNerdRoom", (data) => {
         const { roomId, username, bet, password } = data;
+        const u = (username || "").trim();
+
         if (!backgammonRooms[roomId]) {
             backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom(parseFloat(bet) || 1.0, password);
         }
@@ -1649,24 +1651,24 @@ io.on("connection", (socket) => {
             return;
         }
 
-        if (room.players.length >= 2 && !room.players.includes(username)) {
+        if (room.players.length >= 2 && !room.players.includes(u)) {
             socket.emit("error", "Otaq doludur!");
             return;
         }
 
-        if (!room.players.includes(username)) {
-            room.players.push(username);
-            // İlk gələn Ağ, ikinci gələn Qəhvəyi
-            if (room.players.length === 1) room.playerColors[username] = "WHITE";
-            else room.playerColors[username] = "BROWN";
+        if (!room.players.includes(u)) {
+            room.players.push(u);
+            if (room.players.length === 1) room.playerColors[u] = "WHITE";
+            else room.playerColors[u] = "BROWN";
         }
 
         socket.join(roomId);
 
-        // Əgər 2 nəfər oldusa oyunu başladaq
+        // Əgər otaqda bot varsa və real oyunçu girdisə, oyunu başladaq
         if (room.players.length === 2 && !room.gameStarted) {
             room.gameStarted = true;
-            // Balansları yoxla və çıx
+            room.isBotWaiting = false; // Bot artıq "oyundadır"
+
             room.players.forEach(player => {
                 const user = storage.data.users[player.toLowerCase()];
                 if (user) {
