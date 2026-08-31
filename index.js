@@ -1318,6 +1318,29 @@ function startNerdTurnTimer(roomId) {
     }, 1000);
 }
 
+const nerdBotNames = ["Elnur", "Leyla_W", "Rauf_A", "Gunay92", "Ali_88", "Zaur_Bakili", "Nigar_M", "Fuad_N", "Aysel_T", "Vusal_84"];
+
+function ensureNerdBots() {
+    const roomId = "Nerd_Premium_2";
+    if (!backgammonRooms[roomId]) {
+        backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom(2.0);
+    }
+
+    const room = backgammonRooms[roomId];
+    if (room.players.length === 0) {
+        const randomName = nerdBotNames[Math.floor(Math.random() * nerdBotNames.length)];
+        room.players.push(randomName);
+        room.playerColors[randomName] = "WHITE";
+        room.isBotWaiting = true;
+        room.botUsername = randomName;
+        console.log(`🤖 Nerd Bot ${randomName} 2 AZN-lik otaqda gözləyir.`);
+        broadcastNerdRoomCounts();
+    }
+}
+
+// Hər 20 saniyədən bir Nərd botlarını yoxla
+setInterval(ensureNerdBots, 20000);
+
 function broadcastNerdRoomCounts() {
     const data = {};
     Object.keys(backgammonRooms).forEach(id => {
