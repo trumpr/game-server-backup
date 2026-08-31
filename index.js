@@ -1357,6 +1357,13 @@ async function handleNerdBotTurn(roomId) {
                     if (piece.point === -1) room.bar[botColor]--;
                     piece.point = targetPoint;
 
+                    // Bot hərəkətində də daşı sona keçir
+                    const pieceIdx = room.pieces.indexOf(piece);
+                    if (pieceIdx !== -1) {
+                        room.pieces.splice(pieceIdx, 1);
+                        room.pieces.push(piece);
+                    }
+
                     const moveIdx = room.movesLeft.indexOf(die);
                     room.movesLeft.splice(moveIdx, 1);
 
@@ -1825,6 +1832,13 @@ io.on("connection", (socket) => {
             // Daşı tərpət
             if (piece.point === -1) room.bar[playerColor]--;
             piece.point = targetPoint;
+
+            // Daşı siyahının sonuna keçir (Üst-üstə düzgün yığılması üçün)
+            const pieceIdx = room.pieces.indexOf(piece);
+            if (pieceIdx !== -1) {
+                room.pieces.splice(pieceIdx, 1);
+                room.pieces.push(piece);
+            }
 
             // İstifadə olunmuş zərləri movesLeft-dən sil
             usedDice.forEach(d => {
