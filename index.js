@@ -1695,10 +1695,30 @@ io.on("connection", (socket) => {
                 step = playerColor === "WHITE" ? (piece.point - targetPoint) : (targetPoint - piece.point);
             }
 
-            const moveIdx = room.movesLeft.indexOf(step);
-            if (moveIdx === -1) return; // Belə zər yoxdur
+            if (step <= 0) return;
 
-            // Hədəf nöqtəni yoxla (Blok və ya Hit)
+            // Zərlərin kombinasiyasını yoxla
+            let usedDice = [];
+            let tempMoves = [...room.movesLeft].sort((a, b) => b - a);
+
+            // Sadə zər və ya kombinasiya (maksimum 4 zər - qoşalar üçün)
+            if (room.movesLeft.includes(step)) {
+                usedDice = [step];
+            } else {
+                // Kombinasiya (Cəm yoxlanışı)
+                for (let i = 2; i <= tempMoves.length; i++) {
+                    const combinations = getCombinations(tempMoves, i);
+                    const found = combinations.find(c => c.reduce((a, b) => a + b, 0) === step);
+                    if (found) {
+                        usedDice = found;
+                        break;
+                    }
+                }
+            }
+
+            if (usedDice.length === 0) return; // Uyğun zər yoxdur
+
+            // Hədəf nöqtəni yoxla
             const opponentColor = playerColor === "WHITE" ? "BROWN" : "WHITE";
             const opponentPieces = room.pieces.filter(p => p.point === targetPoint && p.color === opponentColor);
 
@@ -1713,7 +1733,12 @@ io.on("connection", (socket) => {
             // Daşı tərpət
             if (piece.point === -1) room.bar[playerColor]--;
             piece.point = targetPoint;
-            room.movesLeft.splice(moveIdx, 1);
+
+            // İstifadə olunmuş zərləri movesLeft-dən sil
+            usedDice.forEach(d => {
+                const idx = room.movesLeft.indexOf(d);
+                if (idx !== -1) room.movesLeft.splice(idx, 1);
+            });
 
             // Növbəni yoxla
             if (room.movesLeft.length === 0) {
@@ -1725,6 +1750,23 @@ io.on("connection", (socket) => {
             io.to(roomId).emit("actionSound", "das");
         }
     });
+
+    function getCombinations(arr, size) {
+        const result = [];
+        function helper(start, current) {
+            if (current.length === size) {
+                result.push([...current]);
+                return;
+            }
+            for (let i = start; i < arr.length; i++) {
+                current.push(arr[i]);
+                helper(i + 1, current);
+                current.pop();
+            }
+        }
+        helper(0, []);
+        return result;
+    }
 
     // Aviator Sockets
     socket.on("getAviatorPoint", () => { globalAviatorPoint = aviatorLogic.generateAviatorCrashPoint(); socket.emit("aviatorPoint", globalAviatorPoint); });
