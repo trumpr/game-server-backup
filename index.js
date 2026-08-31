@@ -1400,28 +1400,43 @@ async function handleNerdBotTurn(roomId) {
     }
 }
 
-const nerdBotNames = ["Elnur", "Leyla_W", "Rauf_A", "Gunay92", "Ali_88", "Zaur_Bakili", "Nigar_M", "Fuad_N", "Aysel_T", "Vusal_84"];
+const nerdBotNames = [
+    "Elnur", "Leyla_W", "Rauf_A", "Gunay92", "Ali_88", "Zaur_Bakili", "Nigar_M",
+    "Fuad_N", "Aysel_T", "Vusal_84", "Orxan_Az", "Sevinc_M", "Murad_99",
+    "Emin_Baku", "Aydan_A", "Rashad_85", "Tural_X", "Nijat_88", "Jala_T", "Vugar_90"
+];
 
 function ensureNerdBots() {
-    const roomId = "Nerd_Premium_2";
-    if (!backgammonRooms[roomId]) {
-        backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom(2.0);
-    }
+    for (let i = 1; i <= 5; i++) {
+        const roomId = `Nerd_Room_${i}`;
+        if (!backgammonRooms[roomId]) {
+            backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom(2.0);
+        }
 
-    const room = backgammonRooms[roomId];
-    if (room.players.length === 0) {
-        const randomName = nerdBotNames[Math.floor(Math.random() * nerdBotNames.length)];
-        room.players.push(randomName);
-        room.playerColors[randomName] = "WHITE";
-        room.isBotWaiting = true;
-        room.botUsername = randomName;
-        console.log(`🤖 Nerd Bot ${randomName} 2 AZN-lik otaqda gözləyir.`);
-        broadcastNerdRoomCounts();
+        const room = backgammonRooms[roomId];
+        if (room.players.length === 0 || room.winner) {
+            if (room.winner) {
+                backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom(2.0);
+                continue;
+            }
+
+            const usedNames = Object.values(backgammonRooms).map(r => r.botUsername).filter(n => n);
+            const availableNames = nerdBotNames.filter(n => !usedNames.includes(n));
+            const randomName = availableNames[Math.floor(Math.random() * availableNames.length)] || "User_" + Math.floor(Math.random()*100);
+
+            room.players = [randomName];
+            room.playerColors = { [randomName]: "WHITE" };
+            room.isBotWaiting = true;
+            room.botUsername = randomName;
+            room.gameStarted = false;
+            room.winner = null;
+        }
     }
+    broadcastNerdRoomCounts();
 }
 
-// Hər 20 saniyədən bir Nərd botlarını yoxla
-setInterval(ensureNerdBots, 20000);
+// Hər 10 saniyədən bir yoxla
+setInterval(ensureNerdBots, 10000);
 
 function broadcastNerdRoomCounts() {
     const data = {};
