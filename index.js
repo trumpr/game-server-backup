@@ -511,6 +511,20 @@ function handleUserLeavingRoom(username, socket) {
             }
         }
     });
+
+    Object.keys(backgammonRooms).forEach(rid => {
+        const room = backgammonRooms[rid];
+        const pIdx = room.players.indexOf(username);
+        if (pIdx !== -1) {
+            room.players.splice(pIdx, 1);
+            if (socket) socket.leave(rid);
+            if (room.players.length === 0) {
+                delete backgammonRooms[rid];
+            }
+            broadcastNerdRoomCounts();
+        }
+    });
+
     broadcastRoomCounts();
 }
 
@@ -1232,6 +1246,19 @@ function broadcastAdminUpdates() {
     io.to("user_admin33").emit("adminUpdate");
 }
 
+function broadcastNerdRoomCounts() {
+    const data = {};
+    Object.keys(backgammonRooms).forEach(id => {
+        const room = backgammonRooms[id];
+        data[id] = {
+            count: room.players.length,
+            bet: room.bet || 1.0,
+            hasPassword: !!room.password
+        };
+    });
+    io.emit("nerdRoomCounts", data);
+}
+
 io.on("connection", (socket) => {
     socket.on("identify", (username) => {
         const u = (username || "").toString().toLowerCase(); if(!u) return;
@@ -1497,17 +1524,37 @@ io.on("connection", (socket) => {
     });
 
     // Backgammon (Nerd) Sockets
+    socket.on("getNerdRoomCounts", () => {
+        broadcastNerdRoomCounts();
+    });
+
     socket.on("joinNerdRoom", (data) => {
-        const { roomId, username } = data;
+        const { roomId, username, bet, password } = data;
         if (!backgammonRooms[roomId]) {
             backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom();
+            backgammonRooms[roomId].bet = parseFloat(bet) || 1.0;
+            backgammonRooms[roomId].password = password;
         }
+
         const room = backgammonRooms[roomId];
+
+        if (room.password && room.password !== password) {
+            socket.emit("error", "Səhv şifrə!");
+            return;
+        }
+
+        if (room.players.length >= 2 && !room.players.includes(username)) {
+            socket.emit("error", "Otaq doludur!");
+            return;
+        }
+
         if (!room.players.includes(username)) {
             room.players.push(username);
         }
+
         socket.join(roomId);
         io.to(roomId).emit("nerdState", room);
+        broadcastNerdRoomCounts();
     });
 
     socket.on("rollDiceNerd", (data) => {
