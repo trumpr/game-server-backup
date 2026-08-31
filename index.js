@@ -1278,20 +1278,24 @@ function startNerdTurnTimer(roomId) {
 
     if (backgammonTimers[roomId]) clearInterval(backgammonTimers[roomId]);
 
-    // Avtomatik zər atma
-    room.dice = backgammonLogic.rollDice();
-    room.movesLeft = [...room.dice];
-
     // Növbə kimdədirsə, zəri atan odur
     const currentUsername = room.players.find(u => room.playerColors[u] === room.turn);
     room.lastDiceRoller = currentUsername;
 
+    // Avtomatik zər atma
+    room.dice = backgammonLogic.rollDice();
+    room.movesLeft = [...room.dice];
+
     io.to(roomId).emit("nerdState", room);
     io.to(roomId).emit("actionSound", "zer");
 
+    // Əgər növbə botdadırsa, hərəkət etsin
+    if (room.botUsername === currentUsername) {
+        setTimeout(() => handleNerdBotTurn(roomId), 2500); // 2.5 saniyəlik "düşünmə" fasiləsi
+    }
+
     let timeLeft = 30;
     let isOvertime = false;
-
     io.to(roomId).emit("nerdTimer", { timeLeft, isOvertime });
 
     backgammonTimers[roomId] = setInterval(() => {
@@ -1302,20 +1306,80 @@ function startNerdTurnTimer(roomId) {
                 timeLeft = 30;
                 io.to(roomId).emit("nerdTimer", { timeLeft, isOvertime });
             } else {
-                // Vaxt bitdi, uduzmuş sayılır
                 clearInterval(backgammonTimers[roomId]);
                 const loserColor = room.turn;
                 const winnerColor = loserColor === "WHITE" ? "BROWN" : "WHITE";
                 const winnerUsername = room.players.find(u => room.playerColors[u] === winnerColor);
-
-                if (winnerUsername) {
-                    processNerdWinner(roomId, winnerUsername, "Vaxt bitdi!");
-                }
+                if (winnerUsername) processNerdWinner(roomId, winnerUsername, "Vaxt bitdi!");
             }
         } else {
             io.to(roomId).emit("nerdTimer", { timeLeft, isOvertime });
         }
     }, 1000);
+}
+
+async function handleNerdBotTurn(roomId) {
+    const room = backgammonRooms[roomId];
+    if (!room || !room.gameStarted || room.winner || room.movesLeft.length === 0) return;
+
+    const botColor = room.playerColors[room.botUsername];
+    if (room.turn !== botColor) return;
+
+    // Bot üçün mümkün olan bütün hərəkətləri tap
+    let moved = false;
+    const direction = botColor === "WHITE" ? -1 : 1;
+
+    for (const die of room.movesLeft) {
+        // Bar-da daş varsa, əvvəlcə onu çıxarmalıdır
+        const piecesOnBar = room.pieces.filter(p => p.color === botColor && p.point === -1);
+
+        let availablePieces = piecesOnBar.length > 0 ? piecesOnBar : room.pieces.filter(p => p.color === botColor && p.point !== -1);
+
+        for (const piece of availablePieces) {
+            let targetPoint;
+            if (piece.point === -1) {
+                targetPoint = botColor === "WHITE" ? (24 - die) : (die - 1);
+            } else {
+                targetPoint = piece.point + (die * direction);
+            }
+
+            if (targetPoint >= 0 && targetPoint <= 23) {
+                const opponentColor = botColor === "WHITE" ? "BROWN" : "WHITE";
+                const opponentPieces = room.pieces.filter(p => p.point === targetPoint && p.color === opponentColor);
+
+                if (opponentPieces.length < 2) {
+                    // Hərəkət mümkündür!
+                    if (opponentPieces.length === 1) {
+                        opponentPieces[0].point = -1;
+                        room.bar[opponentColor]++;
+                    }
+
+                    if (piece.point === -1) room.bar[botColor]--;
+                    piece.point = targetPoint;
+
+                    const moveIdx = room.movesLeft.indexOf(die);
+                    room.movesLeft.splice(moveIdx, 1);
+
+                    io.to(roomId).emit("nerdState", room);
+                    io.to(roomId).emit("actionSound", "das");
+
+                    moved = true;
+                    break;
+                }
+            }
+        }
+        if (moved) break;
+    }
+
+    if (moved && room.movesLeft.length > 0) {
+        // Hələ zər qalıbsa, bir az gözlə və növbəti hərəkəti et
+        setTimeout(() => handleNerdBotTurn(roomId), 1500);
+    } else if (room.movesLeft.length === 0 || !moved) {
+        // Hərəkətlər bitdi və ya gediş yoxdur, növbəni dəyiş
+        room.movesLeft = [];
+        room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
+        startNerdTurnTimer(roomId);
+    }
 }
 
 const nerdBotNames = ["Elnur", "Leyla_W", "Rauf_A", "Gunay92", "Ali_88", "Zaur_Bakili", "Nigar_M", "Fuad_N", "Aysel_T", "Vusal_84"];
