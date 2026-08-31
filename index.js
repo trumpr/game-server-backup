@@ -1256,6 +1256,11 @@ function startNerdTurnTimer(roomId) {
     // Avtomatik zər atma
     room.dice = backgammonLogic.rollDice();
     room.movesLeft = [...room.dice];
+
+    // Növbə kimdədirsə, zəri atan odur
+    const currentUsername = room.players.find(u => room.playerColors[u] === room.turn);
+    room.lastDiceRoller = currentUsername;
+
     io.to(roomId).emit("nerdState", room);
     io.to(roomId).emit("actionSound", "zer");
 
