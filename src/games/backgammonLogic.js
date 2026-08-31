@@ -1,45 +1,71 @@
-const DEFAULT_LAYOUT = "WHITE,953.5,141.5,28.45029|WHITE,953.75,212.25,28.45029|WHITE,100.5,136.5,28.45029|WHITE,99.25,205.5,28.45029|WHITE,99.25,276.75,28.45029|WHITE,100.0,346.0,28.45029|WHITE,102.5,417.5,28.45029|WHITE,601.75,1207.25,28.45029|WHITE,601.75,907.0,28.45029|BROWN,953.0,1211.0,28.45029|BROWN,953.0,1147.75,28.45029|BROWN,378.5,133.0,28.45029|BROWN,377.5,196.0,28.45029|BROWN,377.75,257.5,28.45029|BROWN,601.5,133.0,28.45029|BROWN,601.5,195.25,28.45029|BROWN,602.0,260.5,28.45029|BROWN,603.25,326.25,28.45029|BROWN,604.5,390.5,28.45029|WHITE,602.25,1134.0,28.45029|WHITE,601.25,1058.75,28.45029|WHITE,600.5,983.0,28.45029|WHITE,379.5,1207.25,28.45029|WHITE,379.5,1133.75,28.45029|WHITE,379.25,1059.75,28.45029|BROWN,98.5,1213.5,28.45029|BROWN,100.0,1148.75,28.45029|BROWN,100.5,1083.25,28.45029|BROWN,98.75,1017.0,28.45029|BROWN,98.5,950.5,28.45029";
+const DEFAULT_LAYOUT = [
+    // WHITE (Moves 23 -> 0)
+    { id: "w1", color: "WHITE", point: 23 }, { id: "w2", color: "WHITE", point: 23 },
+    { id: "w3", color: "WHITE", point: 12 }, { id: "w4", color: "WHITE", point: 12 }, { id: "w5", color: "WHITE", point: 12 }, { id: "w6", color: "WHITE", point: 12 }, { id: "w7", color: "WHITE", point: 12 },
+    { id: "w8", color: "WHITE", point: 7 }, { id: "w9", color: "WHITE", point: 7 }, { id: "w10", color: "WHITE", point: 7 },
+    { id: "w11", color: "WHITE", point: 5 }, { id: "w12", color: "WHITE", point: 5 }, { id: "w13", color: "WHITE", point: 5 }, { id: "w14", color: "WHITE", point: 5 }, { id: "w15", color: "WHITE", point: 5 },
 
-function parseLayout(layoutStr) {
-    return layoutStr.split("|").map((p, index) => {
-        const parts = p.split(",");
-        return {
-            id: `piece_${index}`,
-            color: parts[0],
-            x: parseFloat(parts[1]),
-            y: parseFloat(parts[2]),
-            size: parseFloat(parts[3])
-        };
-    });
-}
+    // BROWN (Moves 0 -> 23)
+    { id: "b1", color: "BROWN", point: 0 }, { id: "b2", color: "BROWN", point: 0 },
+    { id: "b3", color: "BROWN", point: 11 }, { id: "b4", color: "BROWN", point: 11 }, { id: "b5", color: "BROWN", point: 11 }, { id: "b6", color: "BROWN", point: 11 }, { id: "b7", color: "BROWN", point: 11 },
+    { id: "b8", color: "BROWN", point: 16 }, { id: "b9", color: "BROWN", point: 16 }, { id: "b10", color: "BROWN", point: 16 },
+    { id: "b11", color: "BROWN", point: 18 }, { id: "b12", color: "BROWN", point: 18 }, { id: "b13", color: "BROWN", point: 18 }, { id: "b14", color: "BROWN", point: 18 }, { id: "b15", color: "BROWN", point: 18 }
+];
 
 function createBackgammonRoom(bet = 1.0, password = null) {
     return {
-        pieces: parseLayout(DEFAULT_LAYOUT),
+        pieces: JSON.parse(JSON.stringify(DEFAULT_LAYOUT)),
+        bar: { WHITE: 0, BROWN: 0 },
+        off: { WHITE: 0, BROWN: 0 },
         dice: [0, 0],
         movesLeft: [],
         turn: "WHITE",
-        players: [], // List of usernames
-        playerColors: {}, // username -> color
+        players: [],
+        playerColors: {},
         bet: bet,
         password: password,
         gameStarted: false,
-        winner: null,
-        lastDiceRoller: null
+        winner: null
     };
 }
 
-function rollDice() {
-    const d1 = Math.floor(Math.random() * 6) + 1;
-    const d2 = Math.floor(Math.random() * 6) + 1;
-    if (d1 === d2) {
-        return [d1, d1, d1, d1];
-    }
-    return [d1, d2];
+function getPossibleMoves(room, pieceId) {
+    const piece = room.pieces.find(p => p.id === pieceId);
+    if (!piece || piece.color !== room.turn || room.movesLeft.length === 0) return [];
+
+    // Əgər Bar-da daş varsa, başqa daş tərpənə bilməz
+    if (room.bar[piece.color] > 0 && piece.point !== -1) return [];
+
+    const moves = [];
+    const direction = piece.color === "WHITE" ? -1 : 1;
+    const currentPoint = piece.point;
+
+    room.movesLeft.forEach(step => {
+        let target;
+        if (piece.point === -1) { // Bar-dan qayıtma
+            target = piece.color === "WHITE" ? (24 - step) : (step - 1);
+        } else {
+            target = currentPoint + (step * direction);
+        }
+
+        if (target >= 0 && target <= 23) {
+            const opponentColor = piece.color === "WHITE" ? "BROWN" : "WHITE";
+            const piecesOnTarget = room.pieces.filter(p => p.point === target);
+            const isBlocked = piecesOnTarget.length >= 2 && piecesOnTarget[0].color === opponentColor;
+
+            if (!isBlocked) moves.push({ target, step });
+        }
+    });
+
+    return moves;
 }
 
 module.exports = {
     createBackgammonRoom,
-    rollDice,
-    DEFAULT_LAYOUT
+    getPossibleMoves,
+    rollDice: () => {
+        const d1 = Math.floor(Math.random() * 6) + 1;
+        const d2 = Math.floor(Math.random() * 6) + 1;
+        return d1 === d2 ? [d1, d1, d1, d1] : [d1, d2];
+    }
 };

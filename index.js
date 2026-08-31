@@ -1603,31 +1603,52 @@ io.on("connection", (socket) => {
     });
 
     socket.on("movePieceNerd", (data) => {
-        const { roomId, pieceId, x, y } = data;
+        const { roomId, pieceId, targetPoint } = data;
         const room = backgammonRooms[roomId];
         const username = Object.keys(userSockets).find(u => userSockets[u] === socket.id);
 
         if (room && room.gameStarted && !room.winner) {
             const playerColor = room.playerColors[username];
-            if (playerColor !== room.turn) return; // Növbə səndə deyil
+            if (playerColor !== room.turn) return;
 
             const piece = room.pieces.find(p => p.id === pieceId);
-            if (piece && piece.color === playerColor) {
-                piece.x = x;
-                piece.y = y;
+            if (!piece || piece.color !== playerColor) return;
 
-                if (room.movesLeft && room.movesLeft.length > 0) {
-                    room.movesLeft.shift();
-                }
-
-                if (!room.movesLeft || room.movesLeft.length === 0) {
-                    room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
-                    room.movesLeft = [];
-                }
-
-                io.to(roomId).emit("nerdState", room);
-                io.to(roomId).emit("actionSound", "das"); // Daş səsi
+            // Məsafəni hesabla
+            let step;
+            if (piece.point === -1) {
+                step = playerColor === "WHITE" ? (24 - targetPoint) : (targetPoint + 1);
+            } else {
+                step = playerColor === "WHITE" ? (piece.point - targetPoint) : (targetPoint - piece.point);
             }
+
+            const moveIdx = room.movesLeft.indexOf(step);
+            if (moveIdx === -1) return; // Belə zər yoxdur
+
+            // Hədəf nöqtəni yoxla (Blok və ya Hit)
+            const opponentColor = playerColor === "WHITE" ? "BROWN" : "WHITE";
+            const opponentPieces = room.pieces.filter(p => p.point === targetPoint && p.color === opponentColor);
+
+            if (opponentPieces.length >= 2) return; // Blokdur
+
+            if (opponentPieces.length === 1) {
+                // VURMAQ (HIT)
+                opponentPieces[0].point = -1;
+                room.bar[opponentColor]++;
+            }
+
+            // Daşı tərpət
+            if (piece.point === -1) room.bar[playerColor]--;
+            piece.point = targetPoint;
+            room.movesLeft.splice(moveIdx, 1);
+
+            // Növbəni yoxla
+            if (room.movesLeft.length === 0) {
+                room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
+            }
+
+            io.to(roomId).emit("nerdState", room);
+            io.to(roomId).emit("actionSound", "das");
         }
     });
 
