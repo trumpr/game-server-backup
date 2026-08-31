@@ -13,16 +13,33 @@ function parseLayout(layoutStr) {
     });
 }
 
-function createBackgammonRoom() {
+function createBackgammonRoom(bet = 1.0, password = null) {
     return {
         pieces: parseLayout(DEFAULT_LAYOUT),
         dice: [0, 0],
+        movesLeft: [],
         turn: "WHITE",
-        players: []
+        players: [], // List of usernames
+        playerColors: {}, // username -> color
+        bet: bet,
+        password: password,
+        gameStarted: false,
+        winner: null,
+        lastDiceRoller: null
     };
+}
+
+function rollDice() {
+    const d1 = Math.floor(Math.random() * 6) + 1;
+    const d2 = Math.floor(Math.random() * 6) + 1;
+    if (d1 === d2) {
+        return [d1, d1, d1, d1];
+    }
+    return [d1, d2];
 }
 
 module.exports = {
     createBackgammonRoom,
+    rollDice,
     DEFAULT_LAYOUT
 };

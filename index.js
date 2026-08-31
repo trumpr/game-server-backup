@@ -1531,9 +1531,7 @@ io.on("connection", (socket) => {
     socket.on("joinNerdRoom", (data) => {
         const { roomId, username, bet, password } = data;
         if (!backgammonRooms[roomId]) {
-            backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom();
-            backgammonRooms[roomId].bet = parseFloat(bet) || 1.0;
-            backgammonRooms[roomId].password = password;
+            backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom(parseFloat(bet) || 1.0, password);
         }
 
         const room = backgammonRooms[roomId];
@@ -1550,9 +1548,27 @@ io.on("connection", (socket) => {
 
         if (!room.players.includes(username)) {
             room.players.push(username);
+            // İlk gələn Ağ, ikinci gələn Qəhvəyi
+            if (room.players.length === 1) room.playerColors[username] = "WHITE";
+            else room.playerColors[username] = "BROWN";
         }
 
         socket.join(roomId);
+
+        // Əgər 2 nəfər oldusa oyunu başladaq
+        if (room.players.length === 2 && !room.gameStarted) {
+            room.gameStarted = true;
+            // Balansları yoxla və çıx
+            room.players.forEach(player => {
+                const user = storage.data.users[player.toLowerCase()];
+                if (user) {
+                    user.balance = Number((user.balance - room.bet).toFixed(2));
+                    notifyBalance(player);
+                }
+            });
+            storage.saveUsers(io);
+        }
+
         io.to(roomId).emit("nerdState", room);
         broadcastNerdRoomCounts();
     });
@@ -1560,21 +1576,47 @@ io.on("connection", (socket) => {
     socket.on("rollDiceNerd", (data) => {
         const { roomId } = data;
         const room = backgammonRooms[roomId];
-        if (room) {
-            room.dice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+        const username = Object.keys(userSockets).find(u => userSockets[u] === socket.id);
+
+        if (room && room.gameStarted && !room.winner) {
+            const playerColor = room.playerColors[username];
+            if (playerColor !== room.turn) return; // Növbə səndə deyil
+            if (room.movesLeft && room.movesLeft.length > 0) return; // Hələ hərəkətlərin var
+
+            room.dice = backgammonLogic.rollDice();
+            room.movesLeft = [...room.dice];
+            room.lastDiceRoller = username;
+
             io.to(roomId).emit("nerdState", room);
+            io.to(roomId).emit("actionSound", "zer"); // Zər səsi
         }
     });
 
     socket.on("movePieceNerd", (data) => {
         const { roomId, pieceId, x, y } = data;
         const room = backgammonRooms[roomId];
-        if (room) {
+        const username = Object.keys(userSockets).find(u => userSockets[u] === socket.id);
+
+        if (room && room.gameStarted && !room.winner) {
+            const playerColor = room.playerColors[username];
+            if (playerColor !== room.turn) return; // Növbə səndə deyil
+
             const piece = room.pieces.find(p => p.id === pieceId);
-            if (piece) {
+            if (piece && piece.color === playerColor) {
                 piece.x = x;
                 piece.y = y;
+
+                if (room.movesLeft && room.movesLeft.length > 0) {
+                    room.movesLeft.shift();
+                }
+
+                if (!room.movesLeft || room.movesLeft.length === 0) {
+                    room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
+                    room.movesLeft = [];
+                }
+
                 io.to(roomId).emit("nerdState", room);
+                io.to(roomId).emit("actionSound", "das"); // Daş səsi
             }
         }
     });
