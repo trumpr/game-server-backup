@@ -1322,11 +1322,14 @@ function broadcastNerdRoomCounts() {
     const data = {};
     Object.keys(backgammonRooms).forEach(id => {
         const room = backgammonRooms[id];
-        data[id] = {
-            count: room.players.length,
-            bet: room.bet || 1.0,
-            hasPassword: !!room.password
-        };
+        // Bitmiş oyunları lobbidən gizlətmək olar və ya statusunu göstərmək olar
+        if (!room.winner) {
+            data[id] = {
+                count: room.players.length,
+                bet: room.bet || 1.0,
+                hasPassword: !!room.password
+            };
+        }
     });
     io.emit("nerdRoomCounts", data);
 }
