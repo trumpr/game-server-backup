@@ -1336,15 +1336,46 @@ async function handleNerdBotTurn(roomId) {
     const botColor = room.playerColors[room.botUsername];
     if (room.turn !== botColor) return;
 
-    // Bot üçün mümkün olan bütün hərəkətləri tap
+    const allHome = room.pieces.filter(p => p.color === botColor && p.point !== -2).every(p => {
+        if (botColor === "WHITE") return p.point >= 0 && p.point <= 5;
+        return p.point >= 18 && p.point <= 23;
+    });
+
     let moved = false;
     const direction = botColor === "WHITE" ? -1 : 1;
 
     for (const die of room.movesLeft) {
-        // Bar-da daş varsa, əvvəlcə onu çıxarmalıdır
         const piecesOnBar = room.pieces.filter(p => p.color === botColor && p.point === -1);
+        let availablePieces = piecesOnBar.length > 0 ? piecesOnBar : room.pieces.filter(p => p.color === botColor && p.point !== -1 && p.point !== -2);
 
-        let availablePieces = piecesOnBar.length > 0 ? piecesOnBar : room.pieces.filter(p => p.color === botColor && p.point !== -1);
+        if (allHome) {
+            const pieceToOff = availablePieces.find(p => {
+                const distToExit = botColor === "WHITE" ? p.point + 1 : 24 - p.point;
+                if (die === distToExit) return true;
+                if (die > distToExit) {
+                    const hasFurther = availablePieces.some(ap => {
+                        if (botColor === "WHITE") return ap.point > p.point;
+                        return ap.point < p.point;
+                    });
+                    return !hasFurther;
+                }
+                return false;
+            });
+
+            if (pieceToOff) {
+                pieceToOff.point = -2;
+                if (!room.off) room.off = { WHITE: 0, BROWN: 0 };
+                room.off[botColor]++;
+                const moveIdx = room.movesLeft.indexOf(die);
+                room.movesLeft.splice(moveIdx, 1);
+                const remaining = room.pieces.filter(p => p.color === botColor && p.point !== -2).length;
+                if (remaining === 0) { processNerdWinner(roomId, room.botUsername, "Bütün daşları çıxardı!"); return; }
+                io.to(roomId).emit("nerdState", room);
+                io.to(roomId).emit("actionSound", "das");
+                moved = true;
+                break;
+            }
+        }
 
         for (const piece of availablePieces) {
             let targetPoint;
@@ -1357,30 +1388,16 @@ async function handleNerdBotTurn(roomId) {
             if (targetPoint >= 0 && targetPoint <= 23) {
                 const opponentColor = botColor === "WHITE" ? "BROWN" : "WHITE";
                 const opponentPieces = room.pieces.filter(p => p.point === targetPoint && p.color === opponentColor);
-
                 if (opponentPieces.length < 2) {
-                    // Hərəkət mümkündür!
-                    if (opponentPieces.length === 1) {
-                        opponentPieces[0].point = -1;
-                        room.bar[opponentColor]++;
-                    }
-
+                    if (opponentPieces.length === 1) { opponentPieces[0].point = -1; room.bar[opponentColor]++; }
                     if (piece.point === -1) room.bar[botColor]--;
                     piece.point = targetPoint;
-
-                    // Bot hərəkətində də daşı sona keçir
                     const pieceIdx = room.pieces.indexOf(piece);
-                    if (pieceIdx !== -1) {
-                        room.pieces.splice(pieceIdx, 1);
-                        room.pieces.push(piece);
-                    }
-
+                    if (pieceIdx !== -1) { room.pieces.splice(pieceIdx, 1); room.pieces.push(piece); }
                     const moveIdx = room.movesLeft.indexOf(die);
                     room.movesLeft.splice(moveIdx, 1);
-
                     io.to(roomId).emit("nerdState", room);
                     io.to(roomId).emit("actionSound", "das");
-
                     moved = true;
                     break;
                 }
@@ -1390,10 +1407,8 @@ async function handleNerdBotTurn(roomId) {
     }
 
     if (moved && room.movesLeft.length > 0) {
-        // Hələ zər qalıbsa, bir az gözlə və növbəti hərəkəti et
-        setTimeout(() => handleNerdBotTurn(roomId), 1500);
+        setTimeout(() => handleNerdBotTurn(roomId), 1200);
     } else if (room.movesLeft.length === 0 || !moved) {
-        // Hərəkətlər bitdi və ya gediş yoxdur, növbəni dəyiş
         room.movesLeft = [];
         room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
         startNerdTurnTimer(roomId);
