@@ -1786,9 +1786,22 @@ io.on("connection", (socket) => {
             const piece = room.pieces.find(p => p.id === pieceId);
             if (!piece || piece.color !== playerColor) return;
 
-            // Məsafəni hesabla
+            // Oyundan çıxarma yoxlanışı (Bearing off)
+            const allHome = room.pieces.filter(p => p.color === playerColor).every(p => {
+                if (playerColor === "WHITE") return p.point >= 0 && p.point <= 5;
+                return p.point >= 18 && p.point <= 23;
+            });
+
             let step;
-            if (piece.point === -1) {
+            if (targetPoint === -2) { // Çıxarma cəhdi
+                if (!allHome) return; // Hamısı evdə deyil
+                // Məsafəni hesabla
+                if (playerColor === "WHITE") {
+                    step = piece.point + 1;
+                } else {
+                    step = 24 - piece.point;
+                }
+            } else if (piece.point === -1) {
                 step = playerColor === "WHITE" ? (24 - targetPoint) : (targetPoint + 1);
             } else {
                 step = playerColor === "WHITE" ? (piece.point - targetPoint) : (targetPoint - piece.point);
@@ -1796,57 +1809,81 @@ io.on("connection", (socket) => {
 
             if (step <= 0) return;
 
-            // Zərlərin kombinasiyasını yoxla
             let usedDice = [];
             let tempMoves = [...room.movesLeft].sort((a, b) => b - a);
 
-            // Sadə zər və ya kombinasiya (maksimum 4 zər - qoşalar üçün)
+            // Zərlərin kombinasiyasını yoxla
             if (room.movesLeft.includes(step)) {
                 usedDice = [step];
-            } else {
-                // Kombinasiya (Cəm yoxlanışı)
-                for (let i = 2; i <= tempMoves.length; i++) {
-                    const combinations = getCombinations(tempMoves, i);
-                    const found = combinations.find(c => c.reduce((a, b) => a + b, 0) === step);
-                    if (found) {
-                        usedDice = found;
-                        break;
+            } else if (targetPoint === -2) {
+                // Çıxarma zamanı zər böyük ola bilər
+                const biggerDie = room.movesLeft.find(d => d >= step);
+                if (biggerDie) {
+                    // Əgər daha uzaqda daş yoxdursa, böyük zəri istifadə edə bilər
+                    const hasFurther = room.pieces.filter(p => p.color === playerColor).some(p => {
+                        if (playerColor === "WHITE") return p.point > piece.point;
+                        return p.point < piece.point;
+                    });
+                    if (!hasFurther || biggerDie === step) {
+                        usedDice = [biggerDie];
                     }
                 }
             }
 
-            if (usedDice.length === 0) return; // Uyğun zər yoxdur
-
-            // Hədəf nöqtəni yoxla
-            const opponentColor = playerColor === "WHITE" ? "BROWN" : "WHITE";
-            const opponentPieces = room.pieces.filter(p => p.point === targetPoint && p.color === opponentColor);
-
-            if (opponentPieces.length >= 2) return; // Blokdur
-
-            if (opponentPieces.length === 1) {
-                // VURMAQ (HIT)
-                opponentPieces[0].point = -1;
-                room.bar[opponentColor]++;
+            if (usedDice.length === 0) {
+                // Kombinasiya yoxla (yalnız lövhə daxili hərəkətlər üçün)
+                if (targetPoint !== -2) {
+                    for (let i = 2; i <= tempMoves.length; i++) {
+                        const combinations = getCombinations(tempMoves, i);
+                        const found = combinations.find(c => c.reduce((a, b) => a + b, 0) === step);
+                        if (found) {
+                            usedDice = found;
+                            break;
+                        }
+                    }
+                }
             }
 
-            // Daşı tərpət
-            if (piece.point === -1) room.bar[playerColor]--;
-            piece.point = targetPoint;
+            if (usedDice.length === 0) return;
 
-            // Daşı siyahının sonuna keçir (Üst-üstə düzgün yığılması üçün)
-            const pieceIdx = room.pieces.indexOf(piece);
-            if (pieceIdx !== -1) {
-                room.pieces.splice(pieceIdx, 1);
-                room.pieces.push(piece);
+            if (targetPoint === -2) {
+                // Daşı oyundan çıxar
+                piece.point = -2;
+                if (!room.off) room.off = { WHITE: 0, BROWN: 0 };
+                room.off[playerColor]++;
+
+                // Qalib yoxlanışı
+                const remaining = room.pieces.filter(p => p.color === playerColor && p.point !== -2).length;
+                if (remaining === 0) {
+                    processNerdWinner(roomId, username, "Bütün daşları çıxardı!");
+                    return;
+                }
+            } else {
+                const opponentColor = playerColor === "WHITE" ? "BROWN" : "WHITE";
+                const opponentPieces = room.pieces.filter(p => p.point === targetPoint && p.color === opponentColor);
+
+                if (opponentPieces.length >= 2) return;
+
+                if (opponentPieces.length === 1) {
+                    opponentPieces[0].point = -1;
+                    room.bar[opponentColor]++;
+                }
+
+                if (piece.point === -1) room.bar[playerColor]--;
+                piece.point = targetPoint;
+
+                const pieceIdx = room.pieces.indexOf(piece);
+                if (pieceIdx !== -1) {
+                    room.pieces.splice(pieceIdx, 1);
+                    room.pieces.push(piece);
+                }
             }
 
-            // İstifadə olunmuş zərləri movesLeft-dən sil
             usedDice.forEach(d => {
                 const idx = room.movesLeft.indexOf(d);
                 if (idx !== -1) room.movesLeft.splice(idx, 1);
             });
 
-            // Növbəni yoxla
             if (room.movesLeft.length === 0) {
                 room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
                 startNerdTurnTimer(roomId);
