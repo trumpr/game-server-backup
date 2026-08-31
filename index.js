@@ -1296,6 +1296,16 @@ io.on("connection", (socket) => {
                     socket.emit("cards", rooms[rid].hands[rooms[rid].players[idx].username]);
             }
         });
+
+        // Nərd otaqlarını da yoxla
+        Object.keys(backgammonRooms).forEach(rid => {
+            const room = backgammonRooms[rid];
+            if (room.players.map(p => p.toLowerCase()).includes(u)) {
+                socket.join(rid);
+                socket.emit("nerdState", room);
+            }
+        });
+
         broadcastRoomCounts();
     });
 
