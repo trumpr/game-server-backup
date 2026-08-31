@@ -492,7 +492,6 @@ function handleUserLeavingRoom(username, socket) {
             const isDefault = ROOM_CONFIGS.some(conf => conf.id === rid);
 
             if (isEmpty) {
-                // Otaq boşdursa hər şeyi sıfırla ki, ilişib qalmasın
                 room.gameInProgress = false;
                 room.countdownActive = false;
                 room.pot = 0;
@@ -516,12 +515,24 @@ function handleUserLeavingRoom(username, socket) {
 
     Object.keys(backgammonRooms).forEach(rid => {
         const room = backgammonRooms[rid];
-        const pIdx = room.players.indexOf(username);
+        const pIdx = room.players.findIndex(p => p.toLowerCase() === u);
         if (pIdx !== -1) {
+            if (room.gameStarted && !room.winner) {
+                // Oyun davam edirsə və oyunçu çıxırsa, o uduzmuş sayılır
+                const winnerUsername = room.players.find(p => p.toLowerCase() !== u);
+                if (winnerUsername) {
+                    processNerdWinner(rid, winnerUsername, "Rəqib oyunu tərk etdi!");
+                }
+            }
+
             room.players.splice(pIdx, 1);
             if (socket) socket.leave(rid);
+
             if (room.players.length === 0) {
+                if (backgammonTimers[rid]) clearInterval(backgammonTimers[rid]);
                 delete backgammonRooms[rid];
+            } else {
+                io.to(rid).emit("nerdState", room);
             }
             broadcastNerdRoomCounts();
         }
