@@ -28,6 +28,7 @@ let userSockets = {};
 let rooms = {};
 let backgammonRooms = {};
 let roomTimers = {};
+let backgammonTimers = {};
 let tyomnuTimers = {};
 let globalAviatorPoint = 1.10;
 let globalActiveBets = {};
@@ -1246,6 +1247,44 @@ function broadcastAdminUpdates() {
     io.to("user_admin33").emit("adminUpdate");
 }
 
+function startNerdTurnTimer(roomId) {
+    const room = backgammonRooms[roomId];
+    if (!room || !room.gameStarted || room.winner) return;
+
+    if (backgammonTimers[roomId]) clearInterval(backgammonTimers[roomId]);
+
+    // Avtomatik zər atma
+    room.dice = backgammonLogic.rollDice();
+    room.movesLeft = [...room.dice];
+    io.to(roomId).emit("nerdState", room);
+    io.to(roomId).emit("actionSound", "zer");
+
+    let timeLeft = 30;
+    let isOvertime = false;
+
+    io.to(roomId).emit("nerdTimer", { timeLeft, isOvertime });
+
+    backgammonTimers[roomId] = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+            if (!isOvertime) {
+                isOvertime = true;
+                timeLeft = 30;
+                io.to(roomId).emit("nerdTimer", { timeLeft, isOvertime });
+            } else {
+                // Vaxt bitdi, növbəni dəyiş
+                clearInterval(backgammonTimers[roomId]);
+                room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
+                room.movesLeft = [];
+                io.to(roomId).emit("nerdState", room);
+                startNerdTurnTimer(roomId);
+            }
+        } else {
+            io.to(roomId).emit("nerdTimer", { timeLeft, isOvertime });
+        }
+    }, 1000);
+}
+
 function broadcastNerdRoomCounts() {
     const data = {};
     Object.keys(backgammonRooms).forEach(id => {
@@ -1577,6 +1616,7 @@ io.on("connection", (socket) => {
                 }
             });
             storage.saveUsers(io);
+            startNerdTurnTimer(roomId);
         }
 
         io.to(roomId).emit("nerdState", room);
@@ -1645,9 +1685,10 @@ io.on("connection", (socket) => {
             // Növbəni yoxla
             if (room.movesLeft.length === 0) {
                 room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
+                startNerdTurnTimer(roomId);
+            } else {
+                io.to(roomId).emit("nerdState", room);
             }
-
-            io.to(roomId).emit("nerdState", room);
             io.to(roomId).emit("actionSound", "das");
         }
     });
