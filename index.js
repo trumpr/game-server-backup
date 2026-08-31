@@ -1495,6 +1495,42 @@ io.on("connection", (socket) => {
         }, 5000);
     });
 
+    // Backgammon (Nerd) Sockets
+    socket.on("joinNerdRoom", (data) => {
+        const { roomId, username } = data;
+        if (!backgammonRooms[roomId]) {
+            backgammonRooms[roomId] = backgammonLogic.createBackgammonRoom();
+        }
+        const room = backgammonRooms[roomId];
+        if (!room.players.includes(username)) {
+            room.players.push(username);
+        }
+        socket.join(roomId);
+        io.to(roomId).emit("nerdState", room);
+    });
+
+    socket.on("rollDiceNerd", (data) => {
+        const { roomId } = data;
+        const room = backgammonRooms[roomId];
+        if (room) {
+            room.dice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+            io.to(roomId).emit("nerdState", room);
+        }
+    });
+
+    socket.on("movePieceNerd", (data) => {
+        const { roomId, pieceId, x, y } = data;
+        const room = backgammonRooms[roomId];
+        if (room) {
+            const piece = room.pieces.find(p => p.id === pieceId);
+            if (piece) {
+                piece.x = x;
+                piece.y = y;
+                io.to(roomId).emit("nerdState", room);
+            }
+        }
+    });
+
     // Aviator Sockets
     socket.on("getAviatorPoint", () => { globalAviatorPoint = aviatorLogic.generateAviatorCrashPoint(); socket.emit("aviatorPoint", globalAviatorPoint); });
     socket.on("aviatorBet", async (data) => {
