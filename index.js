@@ -26,6 +26,7 @@ app.use(cors());
 // Global State
 let userSockets = {};
 let rooms = {};
+let backgammonRooms = {};
 let roomTimers = {};
 let tyomnuTimers = {};
 let globalAviatorPoint = 1.10;
