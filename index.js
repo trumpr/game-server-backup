@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 const storage = require("./src/data/storage");
 const tuzLogic = require("./src/games/tuzLogic");
 const aviatorLogic = require("./src/games/aviatorLogic");
+const backgammonLogic = require("./src/games/backgammonLogic");
 
 const app = express();
 const server = http.createServer(app);
