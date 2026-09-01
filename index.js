@@ -1358,7 +1358,8 @@ async function handleNerdBotTurn(roomId) {
 
     for (const die of room.movesLeft) {
         const piecesOnBar = room.pieces.filter(p => p.color === botColor && p.point === -1);
-        let availablePieces = piecesOnBar.length > 0 ? piecesOnBar : room.pieces.filter(p => p.color === botColor && p.point !== -1 && p.point !== -2);
+        // Daşları tərsinə çeviririk ki, bot həmişə yığının ən üstündəki daşı götürsün
+        let availablePieces = (piecesOnBar.length > 0 ? piecesOnBar : room.pieces.filter(p => p.color === botColor && p.point !== -1 && p.point !== -2)).reverse();
 
         if (allHome) {
             const pieceToOff = availablePieces.find(p => {
