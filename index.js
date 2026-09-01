@@ -1301,10 +1301,10 @@ function startNerdTurnTimer(roomId) {
     io.to(roomId).emit("actionSound", "zer");
 
     // Gediş yoxlanışı: Əgər heç bir gediş mümkün deyilsə, növbəni ötür
-    if (!canPlayerMove(room, room.turn)) {
+    if (!canPlayerMove(room, room.turn, room.movesLeft)) {
         setTimeout(() => {
             if (room.winner) return;
-            io.to(roomId).emit("notification", { title: "Növbə Ötürüldü", message: "Mümkün gediş yoxdur!", type: "info" });
+            io.to(roomId).emit("notification", { title: "Gediş Yoxdur", message: "Mümkün gediş olmadığı üçün növbə ötürüldü.", type: "info" });
             room.movesLeft = [];
             room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
             startNerdTurnTimer(roomId);
