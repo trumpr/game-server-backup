@@ -1828,7 +1828,7 @@ io.on("connection", (socket) => {
             if (!piece || piece.color !== playerColor) return;
 
             // Oyundan çıxarma yoxlanışı (Bearing off)
-            const allHome = room.pieces.filter(p => p.color === playerColor).every(p => {
+            const allHome = room.pieces.filter(p => p.color === playerColor && p.point !== -2).every(p => {
                 if (playerColor === "WHITE") return p.point >= 0 && p.point <= 5;
                 return p.point >= 18 && p.point <= 23;
             });
