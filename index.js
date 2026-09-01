@@ -1300,6 +1300,18 @@ function startNerdTurnTimer(roomId) {
     io.to(roomId).emit("nerdState", room);
     io.to(roomId).emit("actionSound", "zer");
 
+    // Gediş yoxlanışı: Əgər heç bir gediş mümkün deyilsə, növbəni ötür
+    if (!canPlayerMove(room, room.turn)) {
+        setTimeout(() => {
+            if (room.winner) return;
+            io.to(roomId).emit("notification", { title: "Növbə Ötürüldü", message: "Mümkün gediş yoxdur!", type: "info" });
+            room.movesLeft = [];
+            room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
+            startNerdTurnTimer(roomId);
+        }, 2000);
+        return;
+    }
+
     // Əgər növbə botdadırsa, hərəkət etsin
     if (room.botUsername === currentUsername) {
         setTimeout(() => handleNerdBotTurn(roomId), 2500); // 2.5 saniyəlik "düşünmə" fasiləsi
@@ -1950,6 +1962,50 @@ io.on("connection", (socket) => {
         }
         helper(0, []);
         return result;
+    }
+
+    function canPlayerMove(room, color) {
+        const playerPieces = room.pieces.filter(p => p.color === color && p.point !== -2);
+        const piecesOnBar = room.pieces.filter(p => p.color === color && p.point === -1);
+        const opponentColor = color === "WHITE" ? "BROWN" : "WHITE";
+        const direction = color === "WHITE" ? -1 : 1;
+
+        // Əgər bardda daş varsa, mütləq ondan başlamalıdır
+        if (piecesOnBar.length > 0) {
+            return room.dice.some(die => {
+                const target = color === "WHITE" ? (24 - die) : (die - 1);
+                const opponentPieces = room.pieces.filter(p => p.point === target && p.color === opponentColor);
+                return opponentPieces.length < 2; // Ən azı bir zərlə girə bilirsə true
+            });
+        }
+
+        // Bardda daş yoxdursa, lövhədəki hər hansı daşın hərəkətini yoxla
+        return playerPieces.some(piece => {
+            return room.dice.some(die => {
+                const target = piece.point + (die * direction);
+                if (target < 0 || target > 23) {
+                    // Çıxarma (Bearing off) yoxlanışı
+                    const allHome = room.pieces.filter(p => p.color === color && p.point !== -2).every(p => {
+                        if (color === "WHITE") return p.point >= 0 && p.point <= 5;
+                        return p.point >= 18 && p.point <= 23;
+                    });
+                    if (allHome) {
+                        const distToExit = color === "WHITE" ? piece.point + 1 : 24 - piece.point;
+                        if (die === distToExit) return true;
+                        if (die > distToExit) {
+                            const hasFurther = room.pieces.filter(p => p.color === color && p.point !== -2).some(p => {
+                                if (color === "WHITE") return p.point > piece.point;
+                                return p.point < piece.point;
+                            });
+                            return !hasFurther;
+                        }
+                    }
+                    return false;
+                }
+                const opponentPieces = room.pieces.filter(p => p.point === target && p.color === opponentColor);
+                return opponentPieces.length < 2;
+            });
+        });
     }
 
     // Aviator Sockets
