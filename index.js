@@ -1825,6 +1825,17 @@ io.on("connection", (socket) => {
 
             io.to(roomId).emit("nerdState", room);
             io.to(roomId).emit("actionSound", "zer"); // Zər səsi
+
+            // Zər atıldıqdan sonra gediş mümkünlüyünü yoxla
+            if (!canPlayerMove(room, playerColor, room.movesLeft)) {
+                setTimeout(() => {
+                    if (room.winner || room.turn !== playerColor) return;
+                    io.to(roomId).emit("notification", { title: "Gediş Yoxdur", message: "Mümkün gediş yoxdur!", type: "info" });
+                    room.movesLeft = [];
+                    room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
+                    startNerdTurnTimer(roomId);
+                }, 2000);
+            }
         }
     });
 
@@ -1943,6 +1954,16 @@ io.on("connection", (socket) => {
                 startNerdTurnTimer(roomId);
             } else {
                 io.to(roomId).emit("nerdState", room);
+                // Hər gedişdən sonra qalan zərlərlə gediş mümkünlüyünü yoxla
+                if (!canPlayerMove(room, playerColor, room.movesLeft)) {
+                    setTimeout(() => {
+                        if (room.winner || room.turn !== playerColor) return;
+                        io.to(roomId).emit("notification", { title: "Gedişlər Bitdi", message: "Qalan zərlərlə gediş mümkün deyil.", type: "info" });
+                        room.movesLeft = [];
+                        room.turn = room.turn === "WHITE" ? "BROWN" : "WHITE";
+                        startNerdTurnTimer(roomId);
+                    }, 1500);
+                }
             }
             io.to(roomId).emit("actionSound", "das");
         }
@@ -1965,15 +1986,20 @@ io.on("connection", (socket) => {
         return result;
     }
 
-    function canPlayerMove(room, color) {
+    function canPlayerMove(room, color, currentMoves) {
+        if (!currentMoves || currentMoves.length === 0) return false;
+
         const playerPieces = room.pieces.filter(p => p.color === color && p.point !== -2);
         const piecesOnBar = room.pieces.filter(p => p.color === color && p.point === -1);
         const opponentColor = color === "WHITE" ? "BROWN" : "WHITE";
         const direction = color === "WHITE" ? -1 : 1;
 
+        // Unikal zər dəyərlərini yoxlayırıq (məsələn, 4-4 olanda ancaq 4-ü bir dəfə yoxlamaq kifayətdir)
+        const uniqueDice = [...new Set(currentMoves)];
+
         // Əgər bardda daş varsa, mütləq ondan başlamalıdır
         if (piecesOnBar.length > 0) {
-            return room.dice.some(die => {
+            return uniqueDice.some(die => {
                 const target = color === "WHITE" ? (24 - die) : (die - 1);
                 const opponentPieces = room.pieces.filter(p => p.point === target && p.color === opponentColor);
                 return opponentPieces.length < 2; // Ən azı bir zərlə girə bilirsə true
@@ -1982,7 +2008,7 @@ io.on("connection", (socket) => {
 
         // Bardda daş yoxdursa, lövhədəki hər hansı daşın hərəkətini yoxla
         return playerPieces.some(piece => {
-            return room.dice.some(die => {
+            return uniqueDice.some(die => {
                 const target = piece.point + (die * direction);
                 if (target < 0 || target > 23) {
                     // Çıxarma (Bearing off) yoxlanışı
